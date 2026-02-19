@@ -96,11 +96,19 @@ class _SongsTab extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         if (audio.songs.isEmpty) {
+          String message = 'No songs found.';
+          if (audio.scanIssue == ScanIssue.permissionDenied) {
+            message = 'Permission denied. Please allow media access in Settings.';
+          } else if (audio.scanIssue == ScanIssue.noFolders) {
+            message = 'No folders selected. Add folders in Settings.';
+          } else if (audio.scanIssue == ScanIssue.error) {
+            message = audio.scanErrorMessage ?? 'Scan failed. Try again.';
+          }
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('No songs found.'),
+                Text(message, textAlign: TextAlign.center),
                 const SizedBox(height: 10),
                 const Text('Go to Settings to add folders.'),
                 ElevatedButton(

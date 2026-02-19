@@ -1,16 +1,33 @@
-# audio_player_offline
+# Audio Player Offline
 
-A new Flutter project.
+Offline music player built with Flutter, focused on Android-first local playback.
 
-## Getting Started
+## Tech Stack
 
-This project is a starting point for a Flutter application.
+- State: `provider`
+- Storage: `hive` + `shared_preferences`
+- Playback: `just_audio` + `just_audio_background`
+- Metadata and scanning: `audio_metadata_reader`, `media_store_plus`
 
-A few resources to get you started if this is your first Flutter project:
+## Quality Gates
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- `flutter analyze` must pass
+- `flutter test` must pass
+- GitHub Actions CI runs analyze + test on push/PR
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Security/Privacy Notes
+
+- Android uses modern read permissions (`READ_MEDIA_AUDIO` for Android 13+, `READ_EXTERNAL_STORAGE` for older versions)
+- iOS requests media library access for playback only
+- No microphone permission is requested
+
+## Future Migration Note
+
+Current data layer stays on `Hive v2` for stability and simplicity. If future requirements need stronger querying or larger-scale local data operations, evaluate a planned migration to Isar or Hive CE in a separate milestone.
+
+## Credits
+
+- Codex (GPT-5, OpenAI) for implementation and modernization support.
+- Google Antigravity (Gemini) for earlier development assistance.
+- GitHub Copilot for earlier development assistance.
+

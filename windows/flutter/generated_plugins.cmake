@@ -3,7 +3,6 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  flutter_media_metadata
   just_audio_windows
   permission_handler_windows
 )

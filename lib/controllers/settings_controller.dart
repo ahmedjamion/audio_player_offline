@@ -1,43 +1,99 @@
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
+
+import '../services/media_permission_service.dart';
+
+class AddFolderResult {
+  const AddFolderResult({
+    required this.added,
+    required this.permissionDenied,
+    required this.cancelled,
+    required this.alreadyExists,
+  });
+
+  final bool added;
+  final bool permissionDenied;
+  final bool cancelled;
+  final bool alreadyExists;
+}
+
+typedef PreferencesProvider = Future<SharedPreferences> Function();
+typedef DirectoryPicker = Future<String?> Function();
 
 class SettingsController extends ChangeNotifier {
   static const String _prefKeyFolders = 'audio_folders';
-  List<String> _folders = [];
 
-  List<String> get folders => List.unmodifiable(_folders);
-
-  SettingsController() {
-    _loadFolders();
+  SettingsController({
+    MediaPermissionService? mediaPermissionService,
+    PreferencesProvider? preferencesProvider,
+    DirectoryPicker? directoryPicker,
+  })  : _mediaPermissionService =
+            mediaPermissionService ?? MediaPermissionService(),
+        _preferencesProvider =
+            preferencesProvider ?? SharedPreferences.getInstance,
+        _directoryPicker =
+            directoryPicker ?? FilePicker.platform.getDirectoryPath {
+    _initialization = _loadFolders();
   }
 
+  List<String> _folders = [];
+  late final Future<void> _initialization;
+  final MediaPermissionService _mediaPermissionService;
+  final PreferencesProvider _preferencesProvider;
+  final DirectoryPicker _directoryPicker;
+
+  List<String> get folders => List.unmodifiable(_folders);
+  Future<void> get initialized => _initialization;
+
   Future<void> _loadFolders() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _preferencesProvider();
     _folders = prefs.getStringList(_prefKeyFolders) ?? [];
     notifyListeners();
   }
 
-  Future<void> addFolder() async {
-    // Request storage permission if needed (mostly Android)
-    if (!kIsWeb) {
-      var status = await Permission.storage.status;
-      if (!status.isGranted) {
-        status = await Permission.storage.request();
-      }
-      // On Android 13+, different permissions apply, handled by file_picker usually or explicit request
+  Future<MediaPermissionResult> ensureMediaReadPermission() {
+    return _mediaPermissionService.ensureMediaReadPermission();
+  }
+
+  Future<AddFolderResult> addFolder() async {
+    final permission = await ensureMediaReadPermission();
+    if (!permission.isGranted) {
+      return const AddFolderResult(
+        added: false,
+        permissionDenied: true,
+        cancelled: false,
+        alreadyExists: false,
+      );
     }
 
-    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+    final selectedDirectory = await _directoryPicker();
 
     if (selectedDirectory != null) {
       if (!_folders.contains(selectedDirectory)) {
         _folders.add(selectedDirectory);
         await _saveFolders();
         notifyListeners();
+        return const AddFolderResult(
+          added: true,
+          permissionDenied: false,
+          cancelled: false,
+          alreadyExists: false,
+        );
       }
+      return const AddFolderResult(
+        added: false,
+        permissionDenied: false,
+        cancelled: false,
+        alreadyExists: true,
+      );
     }
+    return const AddFolderResult(
+      added: false,
+      permissionDenied: false,
+      cancelled: true,
+      alreadyExists: false,
+    );
   }
 
   Future<void> removeFolder(String path) async {
@@ -47,7 +103,7 @@ class SettingsController extends ChangeNotifier {
   }
 
   Future<void> _saveFolders() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _preferencesProvider();
     await prefs.setStringList(_prefKeyFolders, _folders);
   }
 }

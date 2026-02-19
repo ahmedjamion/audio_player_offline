@@ -44,11 +44,32 @@ class SettingsScreen extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          await context.read<SettingsController>().addFolder();
-          // Trigger scan
-          if (context.mounted) {
+          final result = await context.read<SettingsController>().addFolder();
+          if (!context.mounted) {
+            return;
+          }
+
+          if (result.permissionDenied) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Media permission denied. Please allow access.'),
+              ),
+            );
+            return;
+          }
+          if (result.cancelled) {
+            return;
+          }
+          if (result.alreadyExists) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Folder is already added.')),
+            );
+            return;
+          }
+
+          if (result.added) {
             final folders = context.read<SettingsController>().folders;
-            context.read<AudioPlayerController>().scanSongs(folders);
+            await context.read<AudioPlayerController>().scanSongs(folders);
           }
         },
         label: const Text('Add Folder'),

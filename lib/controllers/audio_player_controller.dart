@@ -1,25 +1,52 @@
 import 'dart:io';
+import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import 'package:on_audio_query/on_audio_query.dart';
-import 'package:flutter_media_metadata/flutter_media_metadata.dart';
+import 'package:media_store_plus/media_store_plus.dart';
 import 'package:path/path.dart' as p;
-import 'package:permission_handler/permission_handler.dart';
 
 import '../models/song_model.dart';
+import '../services/media_permission_service.dart';
 
 enum AppSortType { title, artist, duration }
+enum ScanIssue { none, permissionDenied, noFolders, error }
+
+class LibraryScanResult {
+  const LibraryScanResult({
+    required this.success,
+    required this.permissionDenied,
+    required this.noFolders,
+    this.errorMessage,
+  });
+
+  final bool success;
+  final bool permissionDenied;
+  final bool noFolders;
+  final String? errorMessage;
+}
 
 class AudioPlayerController extends ChangeNotifier {
+  AudioPlayerController({
+    MediaPermissionService? mediaPermissionService,
+  }) : _mediaPermissionService =
+           mediaPermissionService ?? MediaPermissionService() {
+    _initPlayer();
+  }
+
   final AudioPlayer _player = AudioPlayer();
-  final OnAudioQuery _audioQuery = OnAudioQuery();
+  final MediaStore _mediaStore = MediaStore();
+  final MediaPermissionService _mediaPermissionService;
 
   final List<Song> _songs = [];
   List<Song> get songs => List.unmodifiable(_songs);
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
+  ScanIssue _scanIssue = ScanIssue.none;
+  ScanIssue get scanIssue => _scanIssue;
+  String? _scanErrorMessage;
+  String? get scanErrorMessage => _scanErrorMessage;
 
   Song? _currentSong;
   Song? get currentSong => _currentSong;
@@ -43,10 +70,6 @@ class AudioPlayerController extends ChangeNotifier {
 
   AppSortType _sortType = AppSortType.title;
   AppSortType get sortType => _sortType;
-
-  AudioPlayerController() {
-    _initPlayer();
-  }
 
   void _initPlayer() {
     _player.playerStateStream.listen((state) {
@@ -75,20 +98,58 @@ class AudioPlayerController extends ChangeNotifier {
     });
   }
 
-  Future<void> scanSongs(List<String> folders) async {
+  Future<LibraryScanResult> scanSongs(List<String> folders) async {
     _isLoading = true;
+    _scanIssue = ScanIssue.none;
+    _scanErrorMessage = null;
     notifyListeners();
     _songs.clear();
 
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      await _scanDesktop(folders);
-    } else if (Platform.isAndroid || Platform.isIOS) {
-      await _scanMobile(folders);
-    }
+    try {
+      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        if (folders.isEmpty) {
+          _scanIssue = ScanIssue.noFolders;
+          return const LibraryScanResult(
+            success: false,
+            permissionDenied: false,
+            noFolders: true,
+          );
+        }
+        await _scanDesktop(folders);
+      } else if (Platform.isAndroid || Platform.isIOS) {
+        final result = await _scanMobile(folders);
+        if (!result.success) {
+          if (result.permissionDenied) {
+            _scanIssue = ScanIssue.permissionDenied;
+          } else if (result.noFolders) {
+            _scanIssue = ScanIssue.noFolders;
+          } else {
+            _scanIssue = ScanIssue.error;
+            _scanErrorMessage = result.errorMessage;
+          }
+          return result;
+        }
+      }
 
-    _sortSongs();
-    _isLoading = false;
-    notifyListeners();
+      _sortSongs();
+      return const LibraryScanResult(
+        success: true,
+        permissionDenied: false,
+        noFolders: false,
+      );
+    } catch (e) {
+      _scanIssue = ScanIssue.error;
+      _scanErrorMessage = 'Scan failed: $e';
+      return LibraryScanResult(
+        success: false,
+        permissionDenied: false,
+        noFolders: false,
+        errorMessage: _scanErrorMessage,
+      );
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   void setSortType(AppSortType type) {
@@ -98,19 +159,19 @@ class AudioPlayerController extends ChangeNotifier {
   }
 
   void _sortSongs() {
-    switch (_sortType) {
+    sortSongsByType(_songs, _sortType);
+  }
+
+  static void sortSongsByType(List<Song> songs, AppSortType type) {
+    switch (type) {
       case AppSortType.title:
-        _songs.sort(
-          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-        );
+        songs.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
         break;
       case AppSortType.artist:
-        _songs.sort(
-          (a, b) => a.artist.toLowerCase().compareTo(b.artist.toLowerCase()),
-        );
+        songs.sort((a, b) => a.artist.toLowerCase().compareTo(b.artist.toLowerCase()));
         break;
       case AppSortType.duration:
-        _songs.sort((a, b) => a.duration.compareTo(b.duration));
+        songs.sort((a, b) => a.duration.compareTo(b.duration));
         break;
     }
   }
@@ -128,20 +189,19 @@ class AudioPlayerController extends ChangeNotifier {
               String ext = p.extension(entity.path).toLowerCase();
               if (['.mp3', '.m4a', '.wav', '.flac', '.ogg'].contains(ext)) {
                 try {
-                  final metadata = await MetadataRetriever.fromFile(
-                    File(entity.path),
+                  final metadata = readMetadata(
+                    entity,
+                    getImage: false,
                   );
                   _songs.add(
                     Song(
                       id: entity.path,
                       title:
-                          metadata.trackName ??
-                          p.basenameWithoutExtension(entity.path),
-                      artist:
-                          metadata.trackArtistNames?.first ?? 'Unknown Artist',
-                      album: metadata.albumName ?? 'Unknown Album',
+                          metadata.title ?? p.basenameWithoutExtension(entity.path),
+                      artist: metadata.artist ?? 'Unknown Artist',
+                      album: metadata.album ?? 'Unknown Album',
                       path: entity.path,
-                      duration: metadata.trackDuration ?? 0,
+                      duration: metadata.duration?.inMilliseconds ?? 0,
                     ),
                   );
                 } catch (e) {
@@ -168,48 +228,53 @@ class AudioPlayerController extends ChangeNotifier {
     }
   }
 
-  Future<void> _scanMobile(List<String> folders) async {
-    if (!kIsWeb) {
-      if (Platform.isAndroid) {
-        // Request legacy storage permission or READ_MEDIA_AUDIO depending on SDK
-        // permission_handler handles SDK version checks automatically usually
-        await Permission.storage.request();
-        if (await Permission.audio.status.isDenied) {
-          await Permission.audio.request();
-        }
-      } else {
-        await Permission.mediaLibrary.request();
+  Future<List<String>> _defaultAndroidFolders() async {
+    const candidates = <String>[
+      '/storage/emulated/0/Music',
+      '/storage/emulated/0/Podcasts',
+      '/storage/emulated/0/Download',
+      '/sdcard/Music',
+    ];
+
+    final existing = <String>[];
+    for (final path in candidates) {
+      if (await Directory(path).exists()) {
+        existing.add(path);
       }
     }
+    return existing;
+  }
 
-    // Query all songs
-    List<SongModel> queriedSongs = await _audioQuery.querySongs(
-      sortType: SongSortType.DATE_ADDED,
-      orderType: OrderType.DESC_OR_GREATER,
-      uriType: UriType.EXTERNAL,
-      ignoreCase: true,
+  Future<LibraryScanResult> _scanMobile(List<String> folders) async {
+    final permissionResult =
+        await _mediaPermissionService.ensureMediaReadPermission();
+    if (!permissionResult.isGranted) {
+      return const LibraryScanResult(
+        success: false,
+        permissionDenied: true,
+        noFolders: false,
+      );
+    }
+
+    var foldersToScan = folders;
+    if (Platform.isAndroid && foldersToScan.isEmpty) {
+      foldersToScan = await _defaultAndroidFolders();
+    }
+
+    if (foldersToScan.isEmpty) {
+      return const LibraryScanResult(
+        success: false,
+        permissionDenied: false,
+        noFolders: true,
+      );
+    }
+
+    await _scanDesktop(foldersToScan);
+    return const LibraryScanResult(
+      success: true,
+      permissionDenied: false,
+      noFolders: false,
     );
-
-    // Filter
-    for (var s in queriedSongs) {
-      // On Android 'data' contains the path
-      bool inFolder =
-          folders.isEmpty || folders.any((f) => s.data.startsWith(f));
-
-      if (inFolder) {
-        _songs.add(
-          Song(
-            id: s.id.toString(),
-            title: s.title,
-            artist: s.artist ?? 'Unknown Artist',
-            album: s.album ?? 'Unknown Album',
-            path: s.data,
-            duration: s.duration ?? 0,
-            androidId: s.id,
-          ),
-        );
-      }
-    }
   }
 
   Future<void> playSong(Song song) async {
@@ -218,13 +283,12 @@ class AudioPlayerController extends ChangeNotifier {
 
     try {
       Uri? artUri;
-      if (song.androidId != null) {
-        artUri = Uri.parse(
-          'content://media/external/audio/albumart/${song.androidId}',
-        );
-        // Note: albumart URI might need albumId actually, but on_audio_query handles retrieval usually.
-        // Actually typically it is content://media/external/audio/albumart matches album ID.
-        // Let's rely on just_audio_background handling logic or use placeholders.
+      if (Platform.isAndroid) {
+        try {
+          artUri = await _mediaStore.getUriFromFilePath(path: song.path);
+        } catch (_) {
+          artUri = null;
+        }
       }
 
       final source = AudioSource.file(
