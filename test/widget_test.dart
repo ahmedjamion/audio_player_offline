@@ -17,6 +17,10 @@ class FakeAudioPlayerController extends ChangeNotifier
   @override
   List<Song> songs = [];
   @override
+  List<Song> queue = [];
+  @override
+  int queueIndex = -1;
+  @override
   bool isLoading = false;
   @override
   Song? currentSong;
@@ -40,6 +44,12 @@ class FakeAudioPlayerController extends ChangeNotifier
   int scanCalls = 0;
 
   @override
+  Future<void> next() async {}
+
+  @override
+  Future<void> previous() async {}
+
+  @override
   Future<void> pause() async {
     isPlaying = false;
     notifyListeners();
@@ -48,6 +58,15 @@ class FakeAudioPlayerController extends ChangeNotifier
   @override
   Future<void> playSong(Song song) async {
     currentSong = song;
+    isPlaying = true;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> playSongs(List<Song> songs, int startIndex) async {
+    if (startIndex >= 0 && startIndex < songs.length) {
+      currentSong = songs[startIndex];
+    }
     isPlaying = true;
     notifyListeners();
   }
@@ -133,6 +152,8 @@ class FakePlaylistController extends ChangeNotifier implements PlaylistControlle
 class FakeSettingsController extends ChangeNotifier implements SettingsController {
   @override
   List<String> folders = [];
+  @override
+  ThemeMode themeMode = ThemeMode.dark;
   AddFolderResult addFolderResult = const AddFolderResult(
     added: true,
     permissionDenied: false,
@@ -164,22 +185,32 @@ class FakeSettingsController extends ChangeNotifier implements SettingsControlle
     folders.remove(path);
     notifyListeners();
   }
+
+  @override
+  Future<void> setThemeMode(ThemeMode mode) async {
+    themeMode = mode;
+    notifyListeners();
+  }
 }
 
 void main() {
   testWidgets('HomeScreen shows no folders guidance state', (tester) async {
     final audio = FakeAudioPlayerController()..scanIssue = ScanIssue.noFolders;
     final playlist = FakePlaylistController();
+    final settings = FakeSettingsController();
 
     await tester.pumpWidget(
       MultiProvider(
         providers: [
           ChangeNotifierProvider<AudioPlayerController>.value(value: audio),
           ChangeNotifierProvider<PlaylistController>.value(value: playlist),
+          ChangeNotifierProvider<SettingsController>.value(value: settings),
         ],
         child: const MaterialApp(home: HomeScreen()),
       ),
     );
+
+    await tester.pumpAndSettle();
 
     expect(find.text('No folders selected. Add folders in Settings.'), findsOneWidget);
   });

@@ -2,32 +2,41 @@ import 'package:hive/hive.dart';
 
 part 'song_model.g.dart';
 
+/// Represents an audio song in the library.
 @HiveType(typeId: 0)
 class Song extends HiveObject {
   @HiveField(0)
-  final String id; 
+  final String id;
 
+  /// The title of the song.
   @HiveField(1)
   final String title;
 
+  /// The artist of the song.
   @HiveField(2)
   final String artist;
 
+  /// The album of the song.
   @HiveField(3)
   final String album;
 
+  /// The file path to the audio file.
   @HiveField(4)
   final String path;
 
+  /// Duration of the song in milliseconds.
   @HiveField(5)
-  final int duration; // Milliseconds
+  final int duration;
 
+  /// Android media store ID, if available.
   @HiveField(6)
-  final int? androidId; // For on_audio_query usage on Android
+  final int? androidId;
 
+  /// Whether the song is marked as favorite.
   @HiveField(7)
   bool isFavorite;
 
+  /// Creates a Song with the given properties.
   Song({
     required this.id,
     required this.title,
@@ -39,7 +48,7 @@ class Song extends HiveObject {
     this.isFavorite = false,
   });
 
-  // Factory constructor for creating a copy with modified fields
+  /// Creates a copy of this song with optionally modified fields.
   Song copyWith({
     String? id,
     String? title,

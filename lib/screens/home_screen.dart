@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../controllers/audio_player_controller.dart';
 import '../controllers/playlist_controller.dart';
+import '../controllers/settings_controller.dart';
 
 import '../models/playlist_model.dart';
-import 'player_screen.dart';
-import 'settings_screen.dart';
-import 'library_search_screen.dart';
 import '../widgets/song_tile.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -23,12 +22,7 @@ class HomeScreen extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.search),
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const LibrarySearchScreen(),
-                  ),
-                );
+                context.push('/library-search');
               },
             ),
             Consumer<AudioPlayerController>(
@@ -56,10 +50,7 @@ class HomeScreen extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.settings),
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                );
+                context.push('/settings');
               },
             ),
           ],
@@ -75,7 +66,7 @@ class HomeScreen extends StatelessWidget {
           children: [
             Expanded(
               child: TabBarView(
-                children: [_SongsTab(), _PlaylistsTab(), _FavoritesTab()],
+                children: [const _SongsTab(), _PlaylistsTab(), _FavoritesTab()],
               ),
             ),
             // Mini Player or persistent bar
@@ -87,11 +78,33 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class _SongsTab extends StatelessWidget {
+class _SongsTab extends StatefulWidget {
+  const _SongsTab();
+
+  @override
+  State<_SongsTab> createState() => _SongsTabState();
+}
+
+class _SongsTabState extends State<_SongsTab> {
+  bool _hasScanned = false;
+
   @override
   Widget build(BuildContext context) {
-    return Consumer<AudioPlayerController>(
-      builder: (context, audio, child) {
+    return Consumer2<SettingsController, AudioPlayerController>(
+      builder: (context, settings, audio, child) {
+        if (!_hasScanned && !audio.isLoading) {
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (settings.folders.isNotEmpty) {
+              await audio.scanSongs(settings.folders);
+            }
+            if (mounted) {
+              setState(() {
+                _hasScanned = true;
+              });
+            }
+          });
+        }
+
         if (audio.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -113,10 +126,7 @@ class _SongsTab extends StatelessWidget {
                 const Text('Go to Settings to add folders.'),
                 ElevatedButton(
                   onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                    );
+                    context.push('/settings');
                   },
                   child: const Text('Manage Folders'),
                 ),
@@ -124,22 +134,23 @@ class _SongsTab extends StatelessWidget {
             ),
           );
         }
-        return ListView.builder(
-          itemCount: audio.songs.length,
-          itemBuilder: (context, index) {
-            final song = audio.songs[index];
-            return SongTile(
-              song: song,
-              onTap: () {
-                audio.playSong(song);
-                // Navigate to player? Or explicit open?
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PlayerScreen()),
-                );
-              },
-            );
+        return RefreshIndicator(
+          onRefresh: () async {
+            await audio.scanSongs(settings.folders);
           },
+          child: ListView.builder(
+            itemCount: audio.songs.length,
+            itemBuilder: (context, index) {
+              final song = audio.songs[index];
+              return SongTile(
+                song: song,
+                onTap: () {
+                  audio.playSong(song);
+                  context.push('/player');
+                },
+              );
+            },
+          ),
         );
       },
     );
@@ -223,47 +234,7 @@ class _PlaylistsTab extends StatelessWidget {
   }
 
   void _showPlaylistDetails(BuildContext context, Playlist pl) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) {
-          return Scaffold(
-            appBar: AppBar(title: Text(pl.name)),
-            body: Consumer2<PlaylistController, AudioPlayerController>(
-              builder: (context, plCtrl, audioCtrl, child) {
-                // Resolve songs
-                // This is inefficient O(N*M) but fine for offline library size
-                final songs = audioCtrl.songs
-                    .where((s) => pl.songIds.contains(s.id))
-                    .toList();
-                if (songs.isEmpty) {
-                  return const Center(child: Text('Empty Playlist'));
-                }
-
-                return ListView.builder(
-                  itemCount: songs.length,
-                  itemBuilder: (context, index) {
-                    final song = songs[index];
-                    return SongTile(
-                      song: song,
-                      onTap: () {
-                        audioCtrl.playSong(song);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const PlayerScreen(),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          );
-        },
-      ),
-    );
+    context.push('/playlist/${pl.key}');
   }
 }
 
@@ -288,10 +259,7 @@ class _FavoritesTab extends StatelessWidget {
               song: song,
               onTap: () {
                 audioCtrl.playSong(song);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PlayerScreen()),
-                );
+                context.push('/player');
               },
             );
           },
@@ -304,6 +272,8 @@ class _FavoritesTab extends StatelessWidget {
 class _MiniPlayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Consumer<AudioPlayerController>(
       builder: (context, audio, child) {
         final song = audio.currentSong;
@@ -313,53 +283,92 @@ class _MiniPlayer extends StatelessWidget {
 
         return GestureDetector(
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PlayerScreen()),
-            );
+            context.push('/player');
           },
           child: Container(
-            color: Theme.of(context).primaryColorDark, // or bottomSheetTheme
-            height: 60,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                const Icon(Icons.music_note),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        song.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      Text(
-                        song.artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    audio.isPlaying ? Icons.pause : Icons.play_arrow,
-                    color: Colors.white,
-                  ),
-                  onPressed: audio.isPlaying ? audio.pause : audio.resume,
+            height: 72,
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.05),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.1)
+                    : Colors.black.withValues(alpha: 0.1),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: (isDark
+                          ? const Color(0xFF7CB9A8)
+                          : const Color(0xFF5A9E85))
+                      .withValues(alpha: 0.15),
+                  blurRadius: 20,
+                  offset: const Offset(0, -4),
                 ),
               ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF3A3A3A)
+                            : const Color(0xFFE0E0E0),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.music_note,
+                        color: isDark ? Colors.white54 : Colors.black38,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            song.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            song.artist,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.white60 : Colors.black54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        audio.isPlaying ? Icons.pause : Icons.play_arrow,
+                        color: isDark
+                            ? const Color(0xFF7CB9A8)
+                            : const Color(0xFF5A9E85),
+                      ),
+                      onPressed: audio.isPlaying ? audio.pause : audio.resume,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         );

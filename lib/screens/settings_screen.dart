@@ -10,35 +10,86 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage Folders'),
+        title: const Text('Settings'),
       ),
       body: Consumer<SettingsController>(
         builder: (context, settings, child) {
-          if (settings.folders.isEmpty) {
-            return const Center(
-              child: Text(
-                'No folders added.\nAdd a folder to scan for music.',
-                textAlign: TextAlign.center,
+          return ListView(
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Appearance',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
               ),
-            );
-          }
-          return ListView.builder(
-            itemCount: settings.folders.length,
-            itemBuilder: (context, index) {
-              final folder = settings.folders[index];
-              return ListTile(
-                leading: const Icon(Icons.folder),
-                title: Text(folder),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () {
-                    settings.removeFolder(folder);
-                    // Trigger re-scan?
-                    context.read<AudioPlayerController>().scanSongs(settings.folders);
+              ListTile(
+                leading: const Icon(Icons.dark_mode),
+                title: const Text('Theme'),
+                trailing: SegmentedButton<ThemeMode>(
+                  segments: const [
+                    ButtonSegment(
+                      value: ThemeMode.light,
+                      icon: Icon(Icons.light_mode, size: 18),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.system,
+                      icon: Icon(Icons.brightness_auto, size: 18),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.dark,
+                      icon: Icon(Icons.dark_mode, size: 18),
+                    ),
+                  ],
+                  selected: {settings.themeMode},
+                  onSelectionChanged: (selection) {
+                    settings.setThemeMode(selection.first);
                   },
                 ),
-              );
-            },
+              ),
+              const Divider(),
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Library',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+              if (settings.folders.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text(
+                    'No folders added.\nAdd a folder to scan for music.',
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else
+                ...settings.folders.map((folder) => ListTile(
+                      leading: const Icon(Icons.folder),
+                      title: Text(
+                        folder,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete),
+                        onPressed: () {
+                          settings.removeFolder(folder);
+                          context
+                              .read<AudioPlayerController>()
+                              .scanSongs(settings.folders);
+                        },
+                      ),
+                    )),
+            ],
           );
         },
       ),

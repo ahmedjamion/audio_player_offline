@@ -27,6 +27,7 @@ Current data layer stays on `Hive v2` for stability and simplicity. If future re
 
 ## Credits
 
+- opencode (AI coding assistant) for rules implementation, routing, theme styling, and feature enhancements.
 - Codex (GPT-5, OpenAI) for implementation and modernization support.
 - Google Antigravity (Gemini) for earlier development assistance.
 - GitHub Copilot for earlier development assistance.

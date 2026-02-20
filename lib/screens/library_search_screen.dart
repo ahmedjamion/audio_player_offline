@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../controllers/audio_player_controller.dart';
 import '../models/song_model.dart';
@@ -63,6 +64,7 @@ class _LibrarySearchScreenState extends State<LibrarySearchScreen> {
                   song: song,
                   onTap: () {
                     context.read<AudioPlayerController>().playSong(song);
+                    context.push('/player');
                   },
                 );
               },

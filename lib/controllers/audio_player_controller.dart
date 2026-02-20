@@ -5,13 +5,41 @@ import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:media_store_plus/media_store_plus.dart';
 import 'package:path/path.dart' as p;
+import 'package:logging/logging.dart';
 
 import '../models/song_model.dart';
 import '../services/media_permission_service.dart';
 
-enum AppSortType { title, artist, duration }
-enum ScanIssue { none, permissionDenied, noFolders, error }
+final Logger _logger = Logger('AudioPlayerController');
 
+/// Defines the available sorting options for the song library.
+enum AppSortType {
+  /// Sort by song title.
+  title,
+
+  /// Sort by artist name.
+  artist,
+
+  /// Sort by song duration.
+  duration,
+}
+
+/// Represents the issues that can occur during library scanning.
+enum ScanIssue {
+  /// No issues encountered.
+  none,
+
+  /// Permission to access media was denied.
+  permissionDenied,
+
+  /// No folders were selected for scanning.
+  noFolders,
+
+  /// An error occurred during scanning.
+  error,
+}
+
+/// Result of a library scan operation.
 class LibraryScanResult {
   const LibraryScanResult({
     required this.success,
@@ -20,17 +48,31 @@ class LibraryScanResult {
     this.errorMessage,
   });
 
+  /// Whether the scan completed successfully.
   final bool success;
+
+  /// Whether media permission was denied.
   final bool permissionDenied;
+
+  /// Whether no folders were selected.
   final bool noFolders;
+
+  /// Error message if the scan failed.
   final String? errorMessage;
 }
 
+/// Controller for managing audio playback and library scanning.
+///
+/// This controller handles scanning for audio files on the device,
+/// managing playback state, and providing sorting capabilities.
 class AudioPlayerController extends ChangeNotifier {
+  /// Creates an AudioPlayerController.
+  ///
+  /// Optionally accepts a [mediaPermissionService] for dependency injection.
   AudioPlayerController({
     MediaPermissionService? mediaPermissionService,
-  }) : _mediaPermissionService =
-           mediaPermissionService ?? MediaPermissionService() {
+  })  : _mediaPermissionService =
+            mediaPermissionService ?? MediaPermissionService() {
     _initPlayer();
   }
 
@@ -39,36 +81,68 @@ class AudioPlayerController extends ChangeNotifier {
   final MediaPermissionService _mediaPermissionService;
 
   final List<Song> _songs = [];
+
+  /// The list of scanned songs in the library.
   List<Song> get songs => List.unmodifiable(_songs);
 
+  final List<Song> _queue = [];
+
+  /// The current playback queue.
+  List<Song> get queue => List.unmodifiable(_queue);
+
+  int _queueIndex = -1;
+
+  /// The current index in the queue.
+  int get queueIndex => _queueIndex;
+
   bool _isLoading = false;
+
+  /// Whether the library is currently being scanned.
   bool get isLoading => _isLoading;
   ScanIssue _scanIssue = ScanIssue.none;
+
+  /// The current scan issue, if any.
   ScanIssue get scanIssue => _scanIssue;
   String? _scanErrorMessage;
+
+  /// Error message from the last scan, if it failed.
   String? get scanErrorMessage => _scanErrorMessage;
 
   Song? _currentSong;
+
+  /// The currently playing song.
   Song? get currentSong => _currentSong;
 
   // Playback state
   bool _isPlaying = false;
+
+  /// Whether audio is currently playing.
   bool get isPlaying => _isPlaying;
 
   Duration _duration = Duration.zero;
+
+  /// Duration of the current song.
   Duration get duration => _duration;
 
   Duration _position = Duration.zero;
+
+  /// Current playback position.
   Duration get position => _position;
 
   // Sorting
   bool _isShuffle = false;
+
+  /// Whether shuffle mode is enabled.
   bool get isShuffle => _isShuffle;
 
   LoopMode _loopMode = LoopMode.off;
+
+  /// The current loop mode.
   LoopMode get loopMode => _loopMode;
 
   AppSortType _sortType = AppSortType.title;
+
+  /// The current sort type for the library.
   AppSortType get sortType => _sortType;
 
   void _initPlayer() {
@@ -96,8 +170,21 @@ class AudioPlayerController extends ChangeNotifier {
       _loopMode = mode;
       notifyListeners();
     });
+
+    _player.currentIndexStream.listen((index) {
+      if (index != null && index >= 0 && index < _queue.length) {
+        _queueIndex = index;
+        _currentSong = _queue[index];
+        notifyListeners();
+      }
+    });
   }
 
+  /// Scans the specified folders for audio files.
+  ///
+  /// Returns a [LibraryScanResult] indicating the outcome of the scan.
+  /// On desktop platforms (Windows, Linux, Mac), requires at least one folder.
+  /// On mobile platforms (Android, iOS), will use default folders if none provided.
   Future<LibraryScanResult> scanSongs(List<String> folders) async {
     _isLoading = true;
     _scanIssue = ScanIssue.none;
@@ -152,6 +239,7 @@ class AudioPlayerController extends ChangeNotifier {
     }
   }
 
+  /// Sets the sorting type for the library.
   void setSortType(AppSortType type) {
     _sortType = type;
     _sortSongs();
@@ -162,6 +250,10 @@ class AudioPlayerController extends ChangeNotifier {
     sortSongsByType(_songs, _sortType);
   }
 
+  /// Sorts a list of songs by the specified type.
+  ///
+  /// This is a static method that can be used to sort songs outside of
+  /// the controller context.
   static void sortSongsByType(List<Song> songs, AppSortType type) {
     switch (type) {
       case AppSortType.title:
@@ -186,7 +278,7 @@ class AudioPlayerController extends ChangeNotifier {
             followLinks: false,
           )) {
             if (entity is File) {
-              String ext = p.extension(entity.path).toLowerCase();
+              final String ext = p.extension(entity.path).toLowerCase();
               if (['.mp3', '.m4a', '.wav', '.flac', '.ogg'].contains(ext)) {
                 try {
                   final metadata = readMetadata(
@@ -205,7 +297,7 @@ class AudioPlayerController extends ChangeNotifier {
                     ),
                   );
                 } catch (e) {
-                  debugPrint('Error parsing metadata for ${entity.path}: $e');
+                  _logger.warning('Error parsing metadata for ${entity.path}: $e');
                   // Fallback without metadata
                   _songs.add(
                     Song(
@@ -222,7 +314,7 @@ class AudioPlayerController extends ChangeNotifier {
             }
           }
         } catch (e) {
-          debugPrint('Error scanning directory $folder: $e');
+          _logger.warning('Error scanning directory $folder: $e');
         }
       }
     }
@@ -277,55 +369,132 @@ class AudioPlayerController extends ChangeNotifier {
     );
   }
 
+  /// Plays the specified song.
+  ///
+  /// Sets the song as the current track and begins playback.
+  /// On Android, attempts to load album artwork from the media store.
+  /// Builds a queue from all songs in the library.
   Future<void> playSong(Song song) async {
-    _currentSong = song;
+    if (_songs.isEmpty) return;
+
+    final startIndex = _songs.indexOf(song);
+    if (startIndex == -1) return;
+
+    await playSongs(_songs, startIndex);
+  }
+
+  /// Plays a list of songs starting from the specified index.
+  ///
+  /// This is useful for playing a playlist or album.
+  Future<void> playSongs(List<Song> songList, int startIndex) async {
+    if (songList.isEmpty || startIndex < 0 || startIndex >= songList.length) {
+      return;
+    }
+
+    _queue.clear();
+    _queue.addAll(songList);
+    _queueIndex = startIndex;
+    _currentSong = _queue[startIndex];
     notifyListeners();
 
     try {
-      Uri? artUri;
-      if (Platform.isAndroid) {
-        try {
-          artUri = await _mediaStore.getUriFromFilePath(path: song.path);
-        } catch (_) {
-          artUri = null;
+      final sources = <AudioSource>[];
+      for (final song in songList) {
+        Uri? artUri;
+        if (Platform.isAndroid) {
+          try {
+            artUri = await _mediaStore.getUriFromFilePath(path: song.path);
+          } catch (_) {
+            artUri = null;
+          }
         }
+        sources.add(AudioSource.file(
+          song.path,
+          tag: MediaItem(
+            id: song.id,
+            title: song.title,
+            artist: song.artist,
+            album: song.album,
+            artUri: artUri,
+          ),
+        ));
       }
 
-      final source = AudioSource.file(
-        song.path,
-        tag: MediaItem(
-          id: song.id,
-          title: song.title,
-          artist: song.artist,
-          album: song.album,
-          artUri: artUri,
-        ),
+      await _player.setAudioSources(
+        sources,
+        initialIndex: startIndex,
       );
-
-      await _player.setAudioSource(source);
       await _player.play();
     } catch (e) {
-      debugPrint("Error playing song: $e");
+      _logger.severe('Error playing song: $e');
     }
   }
 
+  /// Plays the next song in the queue.
+  ///
+  /// Does nothing if there is no next song (unless loop mode is enabled).
+  Future<void> next() async {
+    if (_queue.isEmpty) return;
+
+    final nextIndex = _queueIndex + 1;
+    if (nextIndex >= _queue.length) {
+      if (_loopMode == LoopMode.all) {
+        await _player.seek(Duration.zero);
+        await _player.seek(Duration.zero, index: 0);
+      }
+      return;
+    }
+
+    await _player.seekToNext();
+  }
+
+  /// Plays the previous song in the queue.
+  ///
+  /// If more than 3 seconds into the song, restarts it instead.
+  Future<void> previous() async {
+    if (_queue.isEmpty) return;
+
+    if (_position.inSeconds > 3) {
+      await _player.seek(Duration.zero);
+      return;
+    }
+
+    final prevIndex = _queueIndex - 1;
+    if (prevIndex < 0) {
+      if (_loopMode == LoopMode.all) {
+        await _player.seek(Duration.zero);
+        await _player.seek(Duration.zero, index: _queue.length - 1);
+      }
+      return;
+    }
+
+    await _player.seekToPrevious();
+  }
+
+  /// Pauses the currently playing audio.
   Future<void> pause() async {
     await _player.pause();
   }
 
+  /// Resumes playback of the current song.
   Future<void> resume() async {
     await _player.play();
   }
 
+  /// Seeks to the specified position in the current song.
   Future<void> seek(Duration position) async {
     await _player.seek(position);
   }
 
+  /// Toggles shuffle mode on or off.
   Future<void> toggleShuffle() async {
     final enable = !_isShuffle;
     await _player.setShuffleModeEnabled(enable);
   }
 
+  /// Toggles loop mode between off, all, and one.
+  ///
+  /// Cycles through: off -> all -> one -> off
   Future<void> toggleLoop() async {
     final nextMode = _loopMode == LoopMode.off
         ? LoopMode.all
