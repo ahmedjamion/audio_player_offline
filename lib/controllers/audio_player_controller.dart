@@ -85,11 +85,24 @@ class AudioPlayerController extends ChangeNotifier {
   /// Creates an AudioPlayerController.
   ///
   /// Optionally accepts a [mediaPermissionService] for dependency injection.
-  AudioPlayerController({
-    MediaPermissionService? mediaPermissionService,
-  })  : _mediaPermissionService =
-            mediaPermissionService ?? MediaPermissionService() {
+  AudioPlayerController({MediaPermissionService? mediaPermissionService})
+    : _mediaPermissionService =
+          mediaPermissionService ?? MediaPermissionService() {
     _initPlayer();
+    _loadCachedSongs();
+  }
+
+  /// Initializes the controller with folders to scan.
+  ///
+  /// This should be called after the controller is created to load cached
+  /// songs and scan for new ones if folders have changed.
+  Future<void> initWithFolders(List<String> folders) async {
+    if (folders.isEmpty) return;
+
+    final hasChanges = await haveFoldersChanged(folders);
+    if (hasChanges || _songs.isEmpty) {
+      await scanSongs(folders);
+    }
   }
 
   Box<List<String>>? _songsBox;
@@ -147,6 +160,11 @@ class AudioPlayerController extends ChangeNotifier {
 
   /// Duration of the current song.
   Duration get duration => _duration;
+
+  bool _isInitialized = false;
+
+  /// Whether the controller has finished initial loading (cached songs).
+  bool get isInitialized => _isInitialized;
 
   Duration _position = Duration.zero;
 
@@ -230,14 +248,16 @@ class AudioPlayerController extends ChangeNotifier {
         for (final path in cachedSongs) {
           final file = File(path);
           if (await file.exists()) {
-            _songs.add(Song(
-              id: path,
-              title: p.basenameWithoutExtension(path),
-              artist: 'Unknown Artist',
-              album: 'Unknown Album',
-              path: path,
-              duration: 0,
-            ));
+            _songs.add(
+              Song(
+                id: path,
+                title: p.basenameWithoutExtension(path),
+                artist: 'Unknown Artist',
+                album: 'Unknown Album',
+                path: path,
+                duration: 0,
+              ),
+            );
           }
         }
         if (_songs.isNotEmpty) {
@@ -245,20 +265,20 @@ class AudioPlayerController extends ChangeNotifier {
           notifyListeners();
           _logger.info('Loaded ${_songs.length} cached songs');
         }
+        _isInitialized = true;
+        notifyListeners();
       }
     } catch (e) {
       _logger.warning('Failed to load cached songs: $e');
+      _isInitialized = true;
+      notifyListeners();
     }
   }
 
   Future<void> _saveSongsToCache(List<String> folders) async {
     try {
-      if (_songsBox == null) {
-        _songsBox = await Hive.openBox<List<String>>(_songsBoxName);
-      }
-      if (_foldersBox == null) {
-        _foldersBox = await Hive.openBox<List<String>>(_scanFoldersBoxName);
-      }
+      _songsBox ??= await Hive.openBox<List<String>>(_songsBoxName);
+      _foldersBox ??= await Hive.openBox<List<String>>(_scanFoldersBoxName);
 
       final paths = _songs.map((s) => s.path).toList();
       await _songsBox!.put('songs', paths);
@@ -272,9 +292,7 @@ class AudioPlayerController extends ChangeNotifier {
   /// Returns whether the folders have changed since last scan.
   Future<bool> haveFoldersChanged(List<String> newFolders) async {
     try {
-      if (_foldersBox == null) {
-        _foldersBox = await Hive.openBox<List<String>>(_scanFoldersBoxName);
-      }
+      _foldersBox ??= await Hive.openBox<List<String>>(_scanFoldersBoxName);
       final cachedFolders = _foldersBox!.get('folders');
       if (cachedFolders == null) return true;
 
@@ -366,10 +384,14 @@ class AudioPlayerController extends ChangeNotifier {
   static void sortSongsByType(List<Song> songs, AppSortType type) {
     switch (type) {
       case AppSortType.title:
-        songs.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        songs.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
         break;
       case AppSortType.artist:
-        songs.sort((a, b) => a.artist.toLowerCase().compareTo(b.artist.toLowerCase()));
+        songs.sort(
+          (a, b) => a.artist.toLowerCase().compareTo(b.artist.toLowerCase()),
+        );
         break;
       case AppSortType.duration:
         songs.sort((a, b) => a.duration.compareTo(b.duration));
@@ -379,7 +401,7 @@ class AudioPlayerController extends ChangeNotifier {
 
   Future<void> _scanDesktop(List<String> folders) async {
     final seenPaths = <String>{};
-    
+
     for (var folder in folders) {
       final dir = Directory(folder);
       if (await dir.exists()) {
@@ -393,17 +415,15 @@ class AudioPlayerController extends ChangeNotifier {
               if (['.mp3', '.m4a', '.wav', '.flac', '.ogg'].contains(ext)) {
                 if (seenPaths.contains(entity.path)) continue;
                 seenPaths.add(entity.path);
-                
+
                 try {
-                  final metadata = readMetadata(
-                    entity,
-                    getImage: false,
-                  );
+                  final metadata = readMetadata(entity, getImage: false);
                   _songs.add(
                     Song(
                       id: entity.path,
                       title:
-                          metadata.title ?? p.basenameWithoutExtension(entity.path),
+                          metadata.title ??
+                          p.basenameWithoutExtension(entity.path),
                       artist: metadata.artist ?? 'Unknown Artist',
                       album: metadata.album ?? 'Unknown Album',
                       path: entity.path,
@@ -411,7 +431,9 @@ class AudioPlayerController extends ChangeNotifier {
                     ),
                   );
                 } catch (e) {
-                  _logger.warning('Error parsing metadata for ${entity.path}: $e');
+                  _logger.warning(
+                    'Error parsing metadata for ${entity.path}: $e',
+                  );
                   // Fallback without metadata
                   _songs.add(
                     Song(
@@ -452,8 +474,8 @@ class AudioPlayerController extends ChangeNotifier {
   }
 
   Future<LibraryScanResult> _scanMobile(List<String> folders) async {
-    final permissionResult =
-        await _mediaPermissionService.ensureMediaReadPermission();
+    final permissionResult = await _mediaPermissionService
+        .ensureMediaReadPermission();
     if (!permissionResult.isGranted) {
       return const LibraryScanResult(
         success: false,
@@ -528,22 +550,21 @@ class AudioPlayerController extends ChangeNotifier {
         final sourceUri = Platform.isWindows
             ? Uri.file(song.path)
             : Uri.file(song.path);
-        sources.add(AudioSource.uri(
-          sourceUri,
-          tag: MediaItem(
-            id: song.id,
-            title: song.title,
-            artist: song.artist,
-            album: song.album,
-            artUri: artUri,
+        sources.add(
+          AudioSource.uri(
+            sourceUri,
+            tag: MediaItem(
+              id: song.id,
+              title: song.title,
+              artist: song.artist,
+              album: song.album,
+              artUri: artUri,
+            ),
           ),
-        ));
+        );
       }
 
-      await _player.setAudioSources(
-        sources,
-        initialIndex: startIndex,
-      );
+      await _player.setAudioSources(sources, initialIndex: startIndex);
       await _player.play();
       _logger.info('Play called successfully');
     } catch (e) {

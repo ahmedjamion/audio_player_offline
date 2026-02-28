@@ -3,34 +3,38 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // Light Theme Colors
-  static const Color lightPrimary = Color(0xFF5A9E85);
+  // Light Theme Colors (High contrast)
+  static const Color lightPrimary = Color(0xFF00ACC1);
   static const Color lightOnPrimary = Colors.white;
-  static const Color lightSecondary = Color(0xFFC4918A);
+  static const Color lightSecondary = Color(0xFF00BCD4);
   static const Color lightOnSecondary = Colors.white;
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightOnSurface = Color(0xFF1A1A1A);
-  static const Color lightError = Color(0xFFB85450);
+  static const Color lightOnSurface = Color(0xFF121212);
+  static const Color lightError = Color(0xFFD32F2F);
   static const Color lightOnError = Colors.white;
-  static const Color lightBackground = Color(0xFFF5F2EB);
+  static const Color lightBackground = Color(0xFFF0F0F0);
 
-  // Dark Theme Colors
-  static const Color darkPrimary = Color(0xFF7CB9A8);
-  static const Color darkOnPrimary = Color(0xFF1A1A1A);
-  static const Color darkSecondary = Color(0xFFD4A5A5);
-  static const Color darkOnSecondary = Color(0xFF1A1A1A);
-  static const Color darkSurface = Color(0xFF2A2A2A);
+  // Dark Theme Colors (Cyberpunk)
+  static const Color darkPrimary = Color(0xFF00FFFF);
+  static const Color darkOnPrimary = Color(0xFF0A0A0A);
+  static const Color darkSecondary = Color(0xFF80DEEA);
+  static const Color darkOnSecondary = Color(0xFF0A0A0A);
+  static const Color darkSurface = Color(0xFF151515);
   static const Color darkOnSurface = Color(0xFFE8E8E8);
-  static const Color darkError = Color(0xFFEF5350);
+  static const Color darkError = Color(0xFFFF5252);
   static const Color darkOnError = Colors.white;
-  static const Color darkBackground = Color(0xFF1A1A1A);
+  static const Color darkBackground = Color(0xFF0A0A0A);
 
   // Common Colors
-  static const Color unselectedItemLight = Color(0xFF9E9E9E);
+  static const Color unselectedItemLight = Color(0xFF616161);
   static const Color unselectedItemDark = Color(0xFF6E6E6E);
-  static const Color dividerLight = Color(0xFFE0E0E0);
-  static const Color dividerDark = Color(0xFF3A3A3A);
-  static const Color cardDark = Color(0xFF252525);
-  static const Color inactiveTrackLight = Color(0xFFD4D4D4);
-  static const Color inactiveTrackDark = Color(0xFF4A4A4A);
+  static const Color dividerLight = Color(0xFFBDBDBD);
+  static const Color dividerDark = Color(0xFF2A2A2A);
+  static const Color cardDark = Color(0xFF1A1A1A);
+  static const Color cardLight = Color(0xFFFFFFFF);
+  static const Color inactiveTrackLight = Color(0xFFBDBDBD);
+  static const Color inactiveTrackDark = Color(0xFF2A2A2A);
+
+  // Glow Colors
+  static const Color glowCyan = Color(0x4000FFFF);
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:just_audio_background/just_audio_background.dart';
@@ -22,9 +23,6 @@ Future<void> main() async {
   await Hive.initFlutter();
   Hive.registerAdapter(SongAdapter());
   Hive.registerAdapter(PlaylistAdapter());
-
-  // Open boxes if needed globally or let controllers handle it.
-  // We let PlaylistController handle opening boxes for now.
 
   if (!kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
@@ -53,12 +51,21 @@ class MyApp extends StatelessWidget {
       child: Consumer<SettingsController>(
         builder: (context, settings, child) {
           return MaterialApp.router(
-            title: 'Offline Audio Player',
+            title: 'Offline Music',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),
             themeMode: settings.themeMode,
             routerConfig: appRouter,
+            builder: (context, child) {
+              final brightness = Theme.of(context).brightness;
+              SystemChrome.setSystemUIOverlayStyle(
+                brightness == Brightness.dark
+                    ? SystemUiOverlayStyle.light
+                    : SystemUiOverlayStyle.dark,
+              );
+              return child ?? const SizedBox.shrink();
+            },
           );
         },
       ),

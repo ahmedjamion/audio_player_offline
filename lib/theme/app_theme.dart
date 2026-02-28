@@ -22,11 +22,15 @@ class AppTheme {
       ),
       scaffoldBackgroundColor: AppColors.lightBackground,
       cardTheme: CardThemeData(
-        color: AppColors.lightSurface,
+        color: AppColors.cardLight,
         elevation: 2,
-        shadowColor: Colors.black.withValues(alpha: 0.1),
+        shadowColor: AppColors.lightPrimary.withValues(alpha: 0.2),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: AppColors.lightPrimary.withValues(alpha: 0.1),
+            width: 1,
+          ),
         ),
       ),
       appBarTheme: const AppBarTheme(
@@ -70,7 +74,10 @@ class AppTheme {
         activeTrackColor: AppColors.lightPrimary,
         inactiveTrackColor: AppColors.inactiveTrackLight,
         thumbColor: AppColors.lightPrimary,
-        overlayColor: AppColors.lightPrimary.withValues(alpha: 0.2),
+        overlayColor: AppColors.lightSecondary.withValues(alpha: 0.3),
+        trackHeight: 4,
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
       ),
       tabBarTheme: const TabBarThemeData(
         labelColor: AppColors.lightPrimary,
@@ -103,7 +110,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: AppColors.cardDark,
         elevation: 4,
-        shadowColor: Colors.black.withValues(alpha: 0.3),
+        shadowColor: AppColors.glowCyan,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -115,13 +122,14 @@ class AppTheme {
         centerTitle: true,
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: AppColors.cardDark,
+        backgroundColor: AppColors.darkSurface,
         selectedItemColor: AppColors.darkPrimary,
         unselectedItemColor: AppColors.unselectedItemDark,
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: AppColors.darkPrimary,
         foregroundColor: AppColors.darkOnPrimary,
+        elevation: 4,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -139,22 +147,25 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.darkPrimary,
+          foregroundColor: AppColors.darkSecondary,
         ),
       ),
       iconTheme: const IconThemeData(
-        color: AppColors.darkPrimary,
+        color: AppColors.darkSecondary,
       ),
       sliderTheme: SliderThemeData(
-        activeTrackColor: AppColors.darkPrimary,
+        activeTrackColor: AppColors.darkSecondary,
         inactiveTrackColor: AppColors.inactiveTrackDark,
-        thumbColor: AppColors.darkPrimary,
-        overlayColor: AppColors.darkPrimary.withValues(alpha: 0.2),
+        thumbColor: AppColors.darkSecondary,
+        overlayColor: AppColors.darkSecondary.withValues(alpha: 0.3),
+        trackHeight: 4,
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
       ),
       tabBarTheme: const TabBarThemeData(
-        labelColor: AppColors.darkPrimary,
+        labelColor: AppColors.darkSecondary,
         unselectedLabelColor: AppColors.unselectedItemDark,
-        indicatorColor: AppColors.darkPrimary,
+        indicatorColor: AppColors.darkSecondary,
       ),
       dividerTheme: const DividerThemeData(
         color: AppColors.dividerDark,
@@ -169,64 +180,64 @@ class AppTheme {
         ? ThemeData.light().textTheme
         : ThemeData.dark().textTheme;
 
-    return GoogleFonts.openSansTextTheme(baseTheme).copyWith(
-      displayLarge: GoogleFonts.oswald(
+    return GoogleFonts.poppinsTextTheme(baseTheme).copyWith(
+      displayLarge: GoogleFonts.orbitron(
         fontSize: 57,
         fontWeight: FontWeight.bold,
       ),
-      displayMedium: GoogleFonts.oswald(
+      displayMedium: GoogleFonts.orbitron(
         fontSize: 45,
         fontWeight: FontWeight.bold,
       ),
-      displaySmall: GoogleFonts.oswald(
+      displaySmall: GoogleFonts.orbitron(
         fontSize: 36,
         fontWeight: FontWeight.w600,
       ),
-      headlineLarge: GoogleFonts.oswald(
+      headlineLarge: GoogleFonts.orbitron(
         fontSize: 32,
         fontWeight: FontWeight.w600,
       ),
-      headlineMedium: GoogleFonts.oswald(
+      headlineMedium: GoogleFonts.orbitron(
         fontSize: 28,
         fontWeight: FontWeight.w500,
       ),
-      headlineSmall: GoogleFonts.oswald(
+      headlineSmall: GoogleFonts.orbitron(
         fontSize: 24,
         fontWeight: FontWeight.w500,
       ),
-      titleLarge: GoogleFonts.roboto(
+      titleLarge: GoogleFonts.poppins(
         fontSize: 22,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w600,
       ),
-      titleMedium: GoogleFonts.roboto(
+      titleMedium: GoogleFonts.poppins(
         fontSize: 16,
         fontWeight: FontWeight.w500,
       ),
-      titleSmall: GoogleFonts.roboto(
+      titleSmall: GoogleFonts.poppins(
         fontSize: 14,
         fontWeight: FontWeight.w500,
       ),
-      bodyLarge: GoogleFonts.openSans(
+      bodyLarge: GoogleFonts.poppins(
         fontSize: 16,
         fontWeight: FontWeight.normal,
       ),
-      bodyMedium: GoogleFonts.openSans(
+      bodyMedium: GoogleFonts.poppins(
         fontSize: 14,
         fontWeight: FontWeight.normal,
       ),
-      bodySmall: GoogleFonts.openSans(
+      bodySmall: GoogleFonts.poppins(
         fontSize: 12,
         fontWeight: FontWeight.normal,
       ),
-      labelLarge: GoogleFonts.openSans(
+      labelLarge: GoogleFonts.poppins(
         fontSize: 14,
         fontWeight: FontWeight.w500,
       ),
-      labelMedium: GoogleFonts.openSans(
+      labelMedium: GoogleFonts.poppins(
         fontSize: 12,
         fontWeight: FontWeight.w500,
       ),
-      labelSmall: GoogleFonts.openSans(
+      labelSmall: GoogleFonts.poppins(
         fontSize: 11,
         fontWeight: FontWeight.w500,
       ),

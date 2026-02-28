@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import '../models/song_model.dart';
 import '../controllers/playlist_controller.dart';
 
@@ -23,7 +24,7 @@ class SongTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(
-          Icons.music_note,
+          LucideIcons.music,
           color: theme.iconTheme.color?.withValues(alpha: 0.5),
           size: 22,
         ),
@@ -44,7 +45,7 @@ class SongTile extends StatelessWidget {
       ),
       trailing: PopupMenuButton<String>(
         icon: Icon(
-          Icons.more_vert,
+          LucideIcons.moreVertical,
           color: theme.iconTheme.color?.withValues(alpha: 0.5),
         ),
         onSelected: (value) {
@@ -62,7 +63,7 @@ class SongTile extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(
-                    isFav ? Icons.favorite : Icons.favorite_border,
+                    LucideIcons.heart,
                     size: 20,
                     color: isFav ? theme.colorScheme.secondary : null,
                   ),
@@ -75,7 +76,7 @@ class SongTile extends StatelessWidget {
               value: 'playlist',
               child: Row(
                 children: [
-                  Icon(Icons.playlist_add, size: 20),
+                  Icon(LucideIcons.listPlus, size: 20),
                   SizedBox(width: 8),
                   Text('Add to Playlist'),
                 ],
@@ -117,7 +118,7 @@ class SongTile extends StatelessWidget {
                     final pl = playlistCtrl.playlists[index];
                     return ListTile(
                       leading: Icon(
-                        Icons.queue_music,
+                        LucideIcons.listMusic,
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       title: Text(pl.name),

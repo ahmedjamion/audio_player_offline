@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import '../controllers/audio_player_controller.dart';
 import '../models/song_model.dart';
 import '../widgets/song_tile.dart';
@@ -53,7 +54,7 @@ class _LibrarySearchScreenState extends State<LibrarySearchScreen> {
             border: InputBorder.none,
             suffixIcon: _controller.text.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.clear),
+                    icon: const Icon(LucideIcons.x),
                     onPressed: () {
                       _controller.clear();
                       _search('');

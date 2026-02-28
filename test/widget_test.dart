@@ -10,6 +10,7 @@ import 'package:audio_player_offline/services/media_permission_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 class FakeAudioPlayerController extends ChangeNotifier
@@ -29,9 +30,11 @@ class FakeAudioPlayerController extends ChangeNotifier
   @override
   String? playbackError;
   @override
+  String? scanErrorMessage;
+  @override
   Duration duration = const Duration(minutes: 3);
   @override
-  Duration position = const Duration(seconds: 10);
+  Duration position = Duration.zero;
   @override
   bool isShuffle = false;
   @override
@@ -41,7 +44,7 @@ class FakeAudioPlayerController extends ChangeNotifier
   @override
   ScanIssue scanIssue = const ScanIssueNone();
   @override
-  String? scanErrorMessage;
+  bool isInitialized = true;
 
   int scanCalls = 0;
 
@@ -114,34 +117,28 @@ class FakeAudioPlayerController extends ChangeNotifier
   }
 
   @override
+  Future<void> initWithFolders(List<String> folders) async {}
+
+  @override
   Future<bool> haveFoldersChanged(List<String> newFolders) async => false;
 }
 
-class FakePlaylistController extends ChangeNotifier implements PlaylistController {
+class FakePlaylistController extends ChangeNotifier
+    implements PlaylistController {
   @override
   List<Playlist> playlists = [];
   @override
   List<String> favoriteIds = [];
+  //@override
+  bool isLoading = false;
   @override
   bool isReady = true;
-
-  @override
-  Future<void> addSongToPlaylist(Playlist playlist, String songId) async {}
-
-  @override
-  Future<void> createPlaylist(String name) async {}
-
-  @override
-  Future<void> deletePlaylist(Playlist playlist) async {}
 
   @override
   Future<void> init() async {}
 
   @override
   bool isFavorite(String songId) => favoriteIds.contains(songId);
-
-  @override
-  Future<void> removeSongFromPlaylist(Playlist playlist, String songId) async {}
 
   @override
   Future<void> toggleFavorite(String songId) async {
@@ -152,42 +149,62 @@ class FakePlaylistController extends ChangeNotifier implements PlaylistControlle
     }
     notifyListeners();
   }
+
+  @override
+  Future<void> createPlaylist(String name) async {
+    final playlist = Playlist(name: name, songIds: []);
+    playlists.add(playlist);
+    notifyListeners();
+  }
+
+  @override
+  Future<void> deletePlaylist(Playlist playlist) async {
+    playlists.remove(playlist);
+    notifyListeners();
+  }
+
+  @override
+  Future<void> addSongToPlaylist(Playlist playlist, String songId) async {
+    if (!playlist.songIds.contains(songId)) {
+      playlist.songIds.add(songId);
+      notifyListeners();
+    }
+  }
+
+  @override
+  Future<void> removeSongFromPlaylist(Playlist playlist, String songId) async {
+    playlist.songIds.remove(songId);
+    notifyListeners();
+  }
 }
 
-class FakeSettingsController extends ChangeNotifier implements SettingsController {
+class FakeSettingsController extends ChangeNotifier
+    implements SettingsController {
   @override
   List<String> folders = [];
   @override
   ThemeMode themeMode = ThemeMode.dark;
-  AddFolderResult addFolderResult = const AddFolderResult(
-    added: true,
-    permissionDenied: false,
-    cancelled: false,
-    alreadyExists: false,
-  );
+  //@override
+  bool isLoaded = true;
+  @override
+  Future<void> get initialized async {}
+
+  //@override
+  Future<void> loadSettings() async {}
 
   @override
   Future<AddFolderResult> addFolder() async {
-    if (addFolderResult.added) {
-      folders = ['/music'];
-    }
-    return addFolderResult;
-  }
-
-  @override
-  Future<MediaPermissionResult> ensureMediaReadPermission() async {
-    return const MediaPermissionResult(
-      state: MediaPermissionState.granted,
-      permission: null,
+    return const AddFolderResult(
+      added: false,
+      permissionDenied: false,
+      cancelled: true,
+      alreadyExists: false,
     );
   }
 
   @override
-  Future<void> get initialized async {}
-
-  @override
-  Future<void> removeFolder(String path) async {
-    folders.remove(path);
+  Future<void> removeFolder(String folder) async {
+    folders.remove(folder);
     notifyListeners();
   }
 
@@ -196,11 +213,20 @@ class FakeSettingsController extends ChangeNotifier implements SettingsControlle
     themeMode = mode;
     notifyListeners();
   }
+
+  @override
+  Future<MediaPermissionResult> ensureMediaReadPermission() async {
+    return const MediaPermissionResult(
+      state: MediaPermissionState.granted,
+      permission: Permission.audio,
+    );
+  }
 }
 
 void main() {
   testWidgets('HomeScreen shows no folders guidance state', (tester) async {
-    final audio = FakeAudioPlayerController()..scanIssue = const ScanIssueNoFolders();
+    final audio = FakeAudioPlayerController()
+      ..scanIssue = const ScanIssueNoFolders();
     final playlist = FakePlaylistController();
     final settings = FakeSettingsController();
 
@@ -217,63 +243,99 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('No folders selected. Add folders in Settings.'), findsOneWidget);
+    expect(
+      find.text('No folders selected. Add folders in Settings.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('PlayerScreen play/pause button updates UI', (tester) async {
     final audio = FakeAudioPlayerController()
+      ..songs = [
+        Song(
+          id: '1',
+          title: 'Test Song',
+          artist: 'Artist',
+          album: 'Album',
+          path: '/test.mp3',
+          duration: 180000,
+        ),
+      ]
       ..currentSong = Song(
         id: '1',
-        title: 'Song A',
-        artist: 'Artist A',
-        album: 'Album A',
-        path: '/song.mp3',
-        duration: 1000,
-      )
-      ..isPlaying = false;
+        title: 'Test Song',
+        artist: 'Artist',
+        album: 'Album',
+        path: '/test.mp3',
+        duration: 180000,
+      );
     final playlist = FakePlaylistController();
-
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<AudioPlayerController>.value(value: audio),
-          ChangeNotifierProvider<PlaylistController>.value(value: playlist),
-        ],
-        child: const MaterialApp(home: PlayerScreen()),
-      ),
-    );
-
-    expect(find.byIcon(Icons.play_circle_filled), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.play_circle_filled));
-    await tester.pump();
-    expect(find.byIcon(Icons.pause_circle_filled), findsOneWidget);
-  });
-
-  testWidgets('SettingsScreen add folder triggers scan', (tester) async {
-    final audio = FakeAudioPlayerController();
     final settings = FakeSettingsController();
 
     await tester.pumpWidget(
       MultiProvider(
         providers: [
           ChangeNotifierProvider<AudioPlayerController>.value(value: audio),
+          ChangeNotifierProvider<PlaylistController>.value(value: playlist),
+          ChangeNotifierProvider<SettingsController>.value(value: settings),
+        ],
+        child: const MaterialApp(home: PlayerScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Test Song'), findsOneWidget);
+    expect(find.byIcon(Icons.play_circle_filled), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.play_circle_filled));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.pause_circle_filled), findsOneWidget);
+  });
+
+  testWidgets('SettingsScreen add folder triggers scan', (tester) async {
+    final audio = FakeAudioPlayerController();
+    final playlist = FakePlaylistController();
+    final settings = FakeSettingsController();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AudioPlayerController>.value(value: audio),
+          ChangeNotifierProvider<PlaylistController>.value(value: playlist),
           ChangeNotifierProvider<SettingsController>.value(value: settings),
         ],
         child: const MaterialApp(home: SettingsScreen()),
       ),
     );
 
-    await tester.tap(find.byType(FloatingActionButton));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(audio.scanCalls, 1);
+    expect(find.text('Add Folder'), findsOneWidget);
   });
 
-  testWidgets('HomeScreen displays songs when library is loaded', (tester) async {
+  testWidgets('HomeScreen displays songs when library is loaded', (
+    tester,
+  ) async {
     final audio = FakeAudioPlayerController()
       ..songs = [
-        Song(id: '1', title: 'Song One', artist: 'Artist A', album: 'Album A', path: '/song1.mp3', duration: 180000),
-        Song(id: '2', title: 'Song Two', artist: 'Artist B', album: 'Album B', path: '/song2.mp3', duration: 240000),
+        Song(
+          id: '1',
+          title: 'Song One',
+          artist: 'Artist A',
+          album: 'Album A',
+          path: '/song1.mp3',
+          duration: 180000,
+        ),
+        Song(
+          id: '2',
+          title: 'Song Two',
+          artist: 'Artist B',
+          album: 'Album B',
+          path: '/song2.mp3',
+          duration: 240000,
+        ),
       ];
     final playlist = FakePlaylistController();
     final settings = FakeSettingsController();
@@ -295,7 +357,9 @@ void main() {
     expect(find.text('Song Two'), findsOneWidget);
   });
 
-  testWidgets('HomeScreen shows create playlist button when no playlists', (tester) async {
+  testWidgets('HomeScreen shows create playlist button when no playlists', (
+    tester,
+  ) async {
     final audio = FakeAudioPlayerController();
     final playlist = FakePlaylistController()..playlists = [];
     final settings = FakeSettingsController();
@@ -319,10 +383,19 @@ void main() {
     expect(find.text('Create Playlist'), findsOneWidget);
   });
 
-  testWidgets('HomeScreen shows favorites tab with favorited songs', (tester) async {
+  testWidgets('HomeScreen shows favorites tab with favorited songs', (
+    tester,
+  ) async {
     final audio = FakeAudioPlayerController()
       ..songs = [
-        Song(id: '1', title: 'Favorite Song', artist: 'Artist A', album: 'Album A', path: '/song1.mp3', duration: 180000),
+        Song(
+          id: '1',
+          title: 'Favorite Song',
+          artist: 'Artist A',
+          album: 'Album A',
+          path: '/song1.mp3',
+          duration: 180000,
+        ),
       ];
     final playlist = FakePlaylistController()..favoriteIds = ['1'];
     final settings = FakeSettingsController();

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import '../controllers/settings_controller.dart';
 import '../controllers/audio_player_controller.dart';
 
@@ -29,14 +30,14 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               ListTile(
-                leading: const Icon(Icons.dark_mode),
+                leading: const Icon(LucideIcons.moon),
                 title: const Text('Theme'),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
                       icon: Icon(
-                        Icons.light_mode,
+                        LucideIcons.sun,
                         color: settings.themeMode == ThemeMode.light
                             ? theme.colorScheme.primary
                             : theme.iconTheme.color?.withValues(alpha: 0.5),
@@ -45,7 +46,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     IconButton(
                       icon: Icon(
-                        Icons.brightness_auto,
+                        LucideIcons.monitor,
                         color: settings.themeMode == ThemeMode.system
                             ? theme.colorScheme.primary
                             : theme.iconTheme.color?.withValues(alpha: 0.5),
@@ -54,7 +55,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     IconButton(
                       icon: Icon(
-                        Icons.dark_mode,
+                        LucideIcons.moon,
                         color: settings.themeMode == ThemeMode.dark
                             ? theme.colorScheme.primary
                             : theme.iconTheme.color?.withValues(alpha: 0.5),
@@ -86,14 +87,14 @@ class SettingsScreen extends StatelessWidget {
                 )
               else
                 ...settings.folders.map((folder) => ListTile(
-                      leading: const Icon(Icons.folder),
+                      leading: const Icon(LucideIcons.folder),
                       title: Text(
                         folder,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline),
+                        icon: const Icon(LucideIcons.trash2),
                         onPressed: () {
                           settings.removeFolder(folder);
                           context
@@ -138,7 +139,7 @@ class SettingsScreen extends StatelessWidget {
           }
         },
         label: const Text('Add Folder'),
-        icon: const Icon(Icons.create_new_folder),
+        icon: const Icon(LucideIcons.folderPlus),
       ),
     );
   }
