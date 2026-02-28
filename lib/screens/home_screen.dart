@@ -110,11 +110,12 @@ class _SongsTabState extends State<_SongsTab> {
         }
         if (audio.songs.isEmpty) {
           String message = 'No songs found.';
-          if (audio.scanIssue == ScanIssue.permissionDenied) {
+          final issue = audio.scanIssue;
+          if (issue is ScanIssuePermissionDenied) {
             message = 'Permission denied. Please allow media access in Settings.';
-          } else if (audio.scanIssue == ScanIssue.noFolders) {
+          } else if (issue is ScanIssueNoFolders) {
             message = 'No folders selected. Add folders in Settings.';
-          } else if (audio.scanIssue == ScanIssue.error) {
+          } else if (issue is ScanIssueError) {
             message = audio.scanErrorMessage ?? 'Scan failed. Try again.';
           }
           return Center(
@@ -144,9 +145,11 @@ class _SongsTabState extends State<_SongsTab> {
               final song = audio.songs[index];
               return SongTile(
                 song: song,
-                onTap: () {
-                  audio.playSong(song);
-                  context.push('/player');
+                onTap: () async {
+                  await audio.playSong(song);
+                  if (context.mounted) {
+                    context.push('/player');
+                  }
                 },
               );
             },
@@ -272,7 +275,7 @@ class _FavoritesTab extends StatelessWidget {
 class _MiniPlayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
 
     return Consumer<AudioPlayerController>(
       builder: (context, audio, child) {
@@ -286,89 +289,59 @@ class _MiniPlayer extends StatelessWidget {
             context.push('/player');
           },
           child: Container(
-            height: 72,
+            height: 64,
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.08)
-                  : Colors.black.withValues(alpha: 0.05),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.1)
-                    : Colors.black.withValues(alpha: 0.1),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: (isDark
-                          ? const Color(0xFF7CB9A8)
-                          : const Color(0xFF5A9E85))
-                      .withValues(alpha: 0.15),
-                  blurRadius: 20,
-                  offset: const Offset(0, -4),
+              borderRadius: BorderRadius.circular(12),
+              color: theme.colorScheme.surfaceContainerHighest,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.music_note,
+                    color: theme.iconTheme.color?.withValues(alpha: 0.5),
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        song.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        song.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    audio.isPlaying ? Icons.pause : Icons.play_arrow,
+                    color: theme.colorScheme.primary,
+                  ),
+                  onPressed: audio.isPlaying ? audio.pause : audio.resume,
                 ),
               ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? const Color(0xFF3A3A3A)
-                            : const Color(0xFFE0E0E0),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.music_note,
-                        color: isDark ? Colors.white54 : Colors.black38,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            song.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            song.artist,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? Colors.white60 : Colors.black54,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        audio.isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: isDark
-                            ? const Color(0xFF7CB9A8)
-                            : const Color(0xFF5A9E85),
-                      ),
-                      onPressed: audio.isPlaying ? audio.pause : audio.resume,
-                    ),
-                  ],
-                ),
-              ),
             ),
           ),
         );

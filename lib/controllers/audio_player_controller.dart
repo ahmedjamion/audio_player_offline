@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:flutter/foundation.dart';
+import 'package:hive/hive.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:media_store_plus/media_store_plus.dart';
@@ -11,6 +12,9 @@ import '../models/song_model.dart';
 import '../services/media_permission_service.dart';
 
 final Logger _logger = Logger('AudioPlayerController');
+
+const String _songsBoxName = 'cached_songs';
+const String _scanFoldersBoxName = 'scan_folders';
 
 /// Defines the available sorting options for the song library.
 enum AppSortType {
@@ -25,18 +29,30 @@ enum AppSortType {
 }
 
 /// Represents the issues that can occur during library scanning.
-enum ScanIssue {
-  /// No issues encountered.
-  none,
+sealed class ScanIssue {
+  const ScanIssue();
+}
 
-  /// Permission to access media was denied.
-  permissionDenied,
+/// No issues encountered.
+class ScanIssueNone extends ScanIssue {
+  const ScanIssueNone();
+}
 
-  /// No folders were selected for scanning.
-  noFolders,
+/// Permission to access media was denied.
+class ScanIssuePermissionDenied extends ScanIssue {
+  const ScanIssuePermissionDenied();
+}
 
-  /// An error occurred during scanning.
-  error,
+/// No folders were selected for scanning.
+class ScanIssueNoFolders extends ScanIssue {
+  const ScanIssueNoFolders();
+}
+
+/// An error occurred during scanning.
+class ScanIssueError extends ScanIssue {
+  const ScanIssueError([this.message]);
+
+  final String? message;
 }
 
 /// Result of a library scan operation.
@@ -76,6 +92,9 @@ class AudioPlayerController extends ChangeNotifier {
     _initPlayer();
   }
 
+  Box<List<String>>? _songsBox;
+  Box<List<String>>? _foldersBox;
+
   final AudioPlayer _player = AudioPlayer();
   final MediaStore _mediaStore = MediaStore();
   final MediaPermissionService _mediaPermissionService;
@@ -99,7 +118,7 @@ class AudioPlayerController extends ChangeNotifier {
 
   /// Whether the library is currently being scanned.
   bool get isLoading => _isLoading;
-  ScanIssue _scanIssue = ScanIssue.none;
+  ScanIssue _scanIssue = const ScanIssueNone();
 
   /// The current scan issue, if any.
   ScanIssue get scanIssue => _scanIssue;
@@ -118,6 +137,11 @@ class AudioPlayerController extends ChangeNotifier {
 
   /// Whether audio is currently playing.
   bool get isPlaying => _isPlaying;
+
+  String? _playbackError;
+
+  /// Error message from playback, if any.
+  String? get playbackError => _playbackError;
 
   Duration _duration = Duration.zero;
 
@@ -151,6 +175,22 @@ class AudioPlayerController extends ChangeNotifier {
       notifyListeners();
     });
 
+    _player.processingStateStream.listen((state) {
+      if (state == ProcessingState.completed) {
+        _isPlaying = false;
+        notifyListeners();
+      }
+    });
+
+    _player.playbackEventStream.listen(
+      (event) {},
+      onError: (Object e, StackTrace stackTrace) {
+        _playbackError = e.toString();
+        _logger.severe('Playback error: $e');
+        notifyListeners();
+      },
+    );
+
     _player.durationStream.listen((d) {
       _duration = d ?? Duration.zero;
       notifyListeners();
@@ -180,6 +220,74 @@ class AudioPlayerController extends ChangeNotifier {
     });
   }
 
+  Future<void> _loadCachedSongs() async {
+    try {
+      _songsBox = await Hive.openBox<List<String>>(_songsBoxName);
+      _foldersBox = await Hive.openBox<List<String>>(_scanFoldersBoxName);
+
+      final cachedSongs = _songsBox!.get('songs');
+      if (cachedSongs != null && cachedSongs.isNotEmpty) {
+        for (final path in cachedSongs) {
+          final file = File(path);
+          if (await file.exists()) {
+            _songs.add(Song(
+              id: path,
+              title: p.basenameWithoutExtension(path),
+              artist: 'Unknown Artist',
+              album: 'Unknown Album',
+              path: path,
+              duration: 0,
+            ));
+          }
+        }
+        if (_songs.isNotEmpty) {
+          _sortSongs();
+          notifyListeners();
+          _logger.info('Loaded ${_songs.length} cached songs');
+        }
+      }
+    } catch (e) {
+      _logger.warning('Failed to load cached songs: $e');
+    }
+  }
+
+  Future<void> _saveSongsToCache(List<String> folders) async {
+    try {
+      if (_songsBox == null) {
+        _songsBox = await Hive.openBox<List<String>>(_songsBoxName);
+      }
+      if (_foldersBox == null) {
+        _foldersBox = await Hive.openBox<List<String>>(_scanFoldersBoxName);
+      }
+
+      final paths = _songs.map((s) => s.path).toList();
+      await _songsBox!.put('songs', paths);
+      await _foldersBox!.put('folders', folders);
+      _logger.info('Cached ${_songs.length} songs');
+    } catch (e) {
+      _logger.warning('Failed to cache songs: $e');
+    }
+  }
+
+  /// Returns whether the folders have changed since last scan.
+  Future<bool> haveFoldersChanged(List<String> newFolders) async {
+    try {
+      if (_foldersBox == null) {
+        _foldersBox = await Hive.openBox<List<String>>(_scanFoldersBoxName);
+      }
+      final cachedFolders = _foldersBox!.get('folders');
+      if (cachedFolders == null) return true;
+
+      if (cachedFolders.length != newFolders.length) return true;
+      for (var i = 0; i < cachedFolders.length; i++) {
+        if (cachedFolders[i] != newFolders[i]) return true;
+      }
+      return false;
+    } catch (e) {
+      return true;
+    }
+  }
+
   /// Scans the specified folders for audio files.
   ///
   /// Returns a [LibraryScanResult] indicating the outcome of the scan.
@@ -187,7 +295,7 @@ class AudioPlayerController extends ChangeNotifier {
   /// On mobile platforms (Android, iOS), will use default folders if none provided.
   Future<LibraryScanResult> scanSongs(List<String> folders) async {
     _isLoading = true;
-    _scanIssue = ScanIssue.none;
+    _scanIssue = const ScanIssueNone();
     _scanErrorMessage = null;
     notifyListeners();
     _songs.clear();
@@ -195,7 +303,7 @@ class AudioPlayerController extends ChangeNotifier {
     try {
       if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
         if (folders.isEmpty) {
-          _scanIssue = ScanIssue.noFolders;
+          _scanIssue = const ScanIssueNoFolders();
           return const LibraryScanResult(
             success: false,
             permissionDenied: false,
@@ -207,11 +315,11 @@ class AudioPlayerController extends ChangeNotifier {
         final result = await _scanMobile(folders);
         if (!result.success) {
           if (result.permissionDenied) {
-            _scanIssue = ScanIssue.permissionDenied;
+            _scanIssue = const ScanIssuePermissionDenied();
           } else if (result.noFolders) {
-            _scanIssue = ScanIssue.noFolders;
+            _scanIssue = const ScanIssueNoFolders();
           } else {
-            _scanIssue = ScanIssue.error;
+            _scanIssue = const ScanIssueError();
             _scanErrorMessage = result.errorMessage;
           }
           return result;
@@ -219,13 +327,14 @@ class AudioPlayerController extends ChangeNotifier {
       }
 
       _sortSongs();
+      await _saveSongsToCache(folders);
       return const LibraryScanResult(
         success: true,
         permissionDenied: false,
         noFolders: false,
       );
     } catch (e) {
-      _scanIssue = ScanIssue.error;
+      _scanIssue = const ScanIssueError();
       _scanErrorMessage = 'Scan failed: $e';
       return LibraryScanResult(
         success: false,
@@ -269,6 +378,8 @@ class AudioPlayerController extends ChangeNotifier {
   }
 
   Future<void> _scanDesktop(List<String> folders) async {
+    final seenPaths = <String>{};
+    
     for (var folder in folders) {
       final dir = Directory(folder);
       if (await dir.exists()) {
@@ -280,6 +391,9 @@ class AudioPlayerController extends ChangeNotifier {
             if (entity is File) {
               final String ext = p.extension(entity.path).toLowerCase();
               if (['.mp3', '.m4a', '.wav', '.flac', '.ogg'].contains(ext)) {
+                if (seenPaths.contains(entity.path)) continue;
+                seenPaths.add(entity.path);
+                
                 try {
                   final metadata = readMetadata(
                     entity,
@@ -395,7 +509,10 @@ class AudioPlayerController extends ChangeNotifier {
     _queue.addAll(songList);
     _queueIndex = startIndex;
     _currentSong = _queue[startIndex];
+    _playbackError = null;
     notifyListeners();
+
+    _logger.info('Playing: ${songList[startIndex].path}');
 
     try {
       final sources = <AudioSource>[];
@@ -408,8 +525,11 @@ class AudioPlayerController extends ChangeNotifier {
             artUri = null;
           }
         }
-        sources.add(AudioSource.file(
-          song.path,
+        final sourceUri = Platform.isWindows
+            ? Uri.file(song.path)
+            : Uri.file(song.path);
+        sources.add(AudioSource.uri(
+          sourceUri,
           tag: MediaItem(
             id: song.id,
             title: song.title,
@@ -425,6 +545,7 @@ class AudioPlayerController extends ChangeNotifier {
         initialIndex: startIndex,
       );
       await _player.play();
+      _logger.info('Play called successfully');
     } catch (e) {
       _logger.severe('Error playing song: $e');
     }
@@ -435,16 +556,6 @@ class AudioPlayerController extends ChangeNotifier {
   /// Does nothing if there is no next song (unless loop mode is enabled).
   Future<void> next() async {
     if (_queue.isEmpty) return;
-
-    final nextIndex = _queueIndex + 1;
-    if (nextIndex >= _queue.length) {
-      if (_loopMode == LoopMode.all) {
-        await _player.seek(Duration.zero);
-        await _player.seek(Duration.zero, index: 0);
-      }
-      return;
-    }
-
     await _player.seekToNext();
   }
 
@@ -456,15 +567,6 @@ class AudioPlayerController extends ChangeNotifier {
 
     if (_position.inSeconds > 3) {
       await _player.seek(Duration.zero);
-      return;
-    }
-
-    final prevIndex = _queueIndex - 1;
-    if (prevIndex < 0) {
-      if (_loopMode == LoopMode.all) {
-        await _player.seek(Duration.zero);
-        await _player.seek(Duration.zero, index: _queue.length - 1);
-      }
       return;
     }
 
@@ -501,8 +603,4 @@ class AudioPlayerController extends ChangeNotifier {
         : (_loopMode == LoopMode.all ? LoopMode.one : LoopMode.off);
     await _player.setLoopMode(nextMode);
   }
-
-  // Next/Prev requires playlist implementation in just_audio (ConcatenatingAudioSource)
-  // For now, implementing simple single plays.
-  // TODO: Upgrade to ConcatenatingAudioSource for gapless playback and proper queue management.
 }

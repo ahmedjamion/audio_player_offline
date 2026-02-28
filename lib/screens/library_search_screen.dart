@@ -17,10 +17,9 @@ class _LibrarySearchScreenState extends State<LibrarySearchScreen> {
   List<Song> _filteredSongs = [];
 
   @override
-  void initState() {
-    super.initState();
-    // Initialize with all songs? Or empty? Better empty.
-    // _filteredSongs = context.read<AudioPlayerController>().songs; 
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   void _search(String query) {
@@ -34,28 +33,47 @@ class _LibrarySearchScreenState extends State<LibrarySearchScreen> {
     setState(() {
       _filteredSongs = allSongs.where((s) {
         return s.title.toLowerCase().contains(query.toLowerCase()) ||
-               s.artist.toLowerCase().contains(query.toLowerCase()) ||
-               s.album.toLowerCase().contains(query.toLowerCase());
+            s.artist.toLowerCase().contains(query.toLowerCase()) ||
+            s.album.toLowerCase().contains(query.toLowerCase());
       }).toList();
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: TextField(
           controller: _controller,
           autofocus: true,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             hintText: 'Search songs, artists...',
             border: InputBorder.none,
+            suffixIcon: _controller.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _controller.clear();
+                      _search('');
+                    },
+                  )
+                : null,
           ),
-          onChanged: _search,
+          onChanged: (value) {
+            _search(value);
+            setState(() {});
+          },
         ),
       ),
-      body: _filteredSongs.isEmpty 
-          ? const Center(child: Text('Type to search')) 
+      body: _filteredSongs.isEmpty
+          ? Center(
+              child: Text(
+                _controller.text.isEmpty ? 'Type to search' : 'No results',
+                style: theme.textTheme.bodyMedium,
+              ),
+            )
           : ListView.builder(
               itemCount: _filteredSongs.length,
               itemBuilder: (context, index) {

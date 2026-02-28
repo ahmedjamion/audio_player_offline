@@ -27,6 +27,8 @@ class FakeAudioPlayerController extends ChangeNotifier
   @override
   bool isPlaying = false;
   @override
+  String? playbackError;
+  @override
   Duration duration = const Duration(minutes: 3);
   @override
   Duration position = const Duration(seconds: 10);
@@ -37,7 +39,7 @@ class FakeAudioPlayerController extends ChangeNotifier
   @override
   AppSortType sortType = AppSortType.title;
   @override
-  ScanIssue scanIssue = ScanIssue.none;
+  ScanIssue scanIssue = const ScanIssueNone();
   @override
   String? scanErrorMessage;
 
@@ -110,6 +112,9 @@ class FakeAudioPlayerController extends ChangeNotifier
     isShuffle = !isShuffle;
     notifyListeners();
   }
+
+  @override
+  Future<bool> haveFoldersChanged(List<String> newFolders) async => false;
 }
 
 class FakePlaylistController extends ChangeNotifier implements PlaylistController {
@@ -195,7 +200,7 @@ class FakeSettingsController extends ChangeNotifier implements SettingsControlle
 
 void main() {
   testWidgets('HomeScreen shows no folders guidance state', (tester) async {
-    final audio = FakeAudioPlayerController()..scanIssue = ScanIssue.noFolders;
+    final audio = FakeAudioPlayerController()..scanIssue = const ScanIssueNoFolders();
     final playlist = FakePlaylistController();
     final settings = FakeSettingsController();
 
@@ -262,5 +267,82 @@ void main() {
     await tester.pump();
 
     expect(audio.scanCalls, 1);
+  });
+
+  testWidgets('HomeScreen displays songs when library is loaded', (tester) async {
+    final audio = FakeAudioPlayerController()
+      ..songs = [
+        Song(id: '1', title: 'Song One', artist: 'Artist A', album: 'Album A', path: '/song1.mp3', duration: 180000),
+        Song(id: '2', title: 'Song Two', artist: 'Artist B', album: 'Album B', path: '/song2.mp3', duration: 240000),
+      ];
+    final playlist = FakePlaylistController();
+    final settings = FakeSettingsController();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AudioPlayerController>.value(value: audio),
+          ChangeNotifierProvider<PlaylistController>.value(value: playlist),
+          ChangeNotifierProvider<SettingsController>.value(value: settings),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Song One'), findsOneWidget);
+    expect(find.text('Song Two'), findsOneWidget);
+  });
+
+  testWidgets('HomeScreen shows create playlist button when no playlists', (tester) async {
+    final audio = FakeAudioPlayerController();
+    final playlist = FakePlaylistController()..playlists = [];
+    final settings = FakeSettingsController();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AudioPlayerController>.value(value: audio),
+          ChangeNotifierProvider<PlaylistController>.value(value: playlist),
+          ChangeNotifierProvider<SettingsController>.value(value: settings),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Playlists'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create Playlist'), findsOneWidget);
+  });
+
+  testWidgets('HomeScreen shows favorites tab with favorited songs', (tester) async {
+    final audio = FakeAudioPlayerController()
+      ..songs = [
+        Song(id: '1', title: 'Favorite Song', artist: 'Artist A', album: 'Album A', path: '/song1.mp3', duration: 180000),
+      ];
+    final playlist = FakePlaylistController()..favoriteIds = ['1'];
+    final settings = FakeSettingsController();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AudioPlayerController>.value(value: audio),
+          ChangeNotifierProvider<PlaylistController>.value(value: playlist),
+          ChangeNotifierProvider<SettingsController>.value(value: settings),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Favorites'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Favorite Song'), findsOneWidget);
   });
 }

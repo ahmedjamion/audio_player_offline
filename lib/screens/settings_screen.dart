@@ -8,6 +8,8 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
@@ -16,59 +18,70 @@ class SettingsScreen extends StatelessWidget {
         builder: (context, settings, child) {
           return ListView(
             children: [
-              const Padding(
-                padding: EdgeInsets.all(16.0),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Text(
                   'Appearance',
-                  style: TextStyle(
-                    fontSize: 14,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.primary,
                     fontWeight: FontWeight.bold,
-                    color: Colors.grey,
                   ),
                 ),
               ),
               ListTile(
                 leading: const Icon(Icons.dark_mode),
                 title: const Text('Theme'),
-                trailing: SegmentedButton<ThemeMode>(
-                  segments: const [
-                    ButtonSegment(
-                      value: ThemeMode.light,
-                      icon: Icon(Icons.light_mode, size: 18),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.light_mode,
+                        color: settings.themeMode == ThemeMode.light
+                            ? theme.colorScheme.primary
+                            : theme.iconTheme.color?.withValues(alpha: 0.5),
+                      ),
+                      onPressed: () => settings.setThemeMode(ThemeMode.light),
                     ),
-                    ButtonSegment(
-                      value: ThemeMode.system,
-                      icon: Icon(Icons.brightness_auto, size: 18),
+                    IconButton(
+                      icon: Icon(
+                        Icons.brightness_auto,
+                        color: settings.themeMode == ThemeMode.system
+                            ? theme.colorScheme.primary
+                            : theme.iconTheme.color?.withValues(alpha: 0.5),
+                      ),
+                      onPressed: () => settings.setThemeMode(ThemeMode.system),
                     ),
-                    ButtonSegment(
-                      value: ThemeMode.dark,
-                      icon: Icon(Icons.dark_mode, size: 18),
+                    IconButton(
+                      icon: Icon(
+                        Icons.dark_mode,
+                        color: settings.themeMode == ThemeMode.dark
+                            ? theme.colorScheme.primary
+                            : theme.iconTheme.color?.withValues(alpha: 0.5),
+                      ),
+                      onPressed: () => settings.setThemeMode(ThemeMode.dark),
                     ),
                   ],
-                  selected: {settings.themeMode},
-                  onSelectionChanged: (selection) {
-                    settings.setThemeMode(selection.first);
-                  },
                 ),
               ),
               const Divider(),
-              const Padding(
-                padding: EdgeInsets.all(16.0),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Text(
                   'Library',
-                  style: TextStyle(
-                    fontSize: 14,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.primary,
                     fontWeight: FontWeight.bold,
-                    color: Colors.grey,
                   ),
                 ),
               ),
               if (settings.folders.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
                   child: Text(
                     'No folders added.\nAdd a folder to scan for music.',
                     textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium,
                   ),
                 )
               else
@@ -80,7 +93,7 @@ class SettingsScreen extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       trailing: IconButton(
-                        icon: const Icon(Icons.delete),
+                        icon: const Icon(Icons.delete_outline),
                         onPressed: () {
                           settings.removeFolder(folder);
                           context
@@ -89,6 +102,7 @@ class SettingsScreen extends StatelessWidget {
                         },
                       ),
                     )),
+              const SizedBox(height: 80),
             ],
           );
         },
