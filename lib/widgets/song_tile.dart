@@ -63,7 +63,7 @@ class SongTile extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(
-                    LucideIcons.heart,
+                    isFav ? Icons.favorite : Icons.favorite_border,
                     size: 20,
                     color: isFav ? theme.colorScheme.secondary : null,
                   ),

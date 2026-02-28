@@ -27,18 +27,21 @@ class PlayerScreen extends StatelessWidget {
             builder: (context, audio, child) {
               final song = audio.currentSong;
               if (song == null) return const SizedBox.shrink();
-              return Consumer<PlaylistController>(
-                builder: (context, playlist, child) {
-                  final isFav = playlist.isFavorite(song.id);
-                  return IconButton(
-                    icon: Icon(isFav ? LucideIcons.heart : LucideIcons.heart),
-                    color: isFav
-                        ? (isDark ? AppColors.darkSecondary : AppColors.lightSecondary)
-                        : theme.iconTheme.color,
-                    onPressed: () => playlist.toggleFavorite(song.id),
-                  );
-                },
-              );
+                return Consumer<PlaylistController>(
+                  builder: (context, playlist, child) {
+                    final isFav = playlist.isFavorite(song.id);
+                    return IconButton(
+                      icon: Icon(
+                        isFav ? Icons.favorite : Icons.favorite_border,
+                        size: 24,
+                      ),
+                      color: isFav
+                          ? (isDark ? AppColors.darkSecondary : AppColors.lightSecondary)
+                          : theme.iconTheme.color?.withValues(alpha: 0.4),
+                      onPressed: () => playlist.toggleFavorite(song.id),
+                    );
+                  },
+                );
             },
           ),
         ],
